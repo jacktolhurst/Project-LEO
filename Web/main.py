@@ -14,26 +14,26 @@ ALLOWED_DOMAINS = [
 def HomePage():
     if request.method == "GET" and request.args.get("url"):
         url = request.args.get("url", "")
-        if not isSafeURL(url):
+        if not IsSafeURL(url):
             return "Forbidden redirect!", 403
         return redirect(url, code=302)
     return render_template("home.html")
 
 @app.route("/success.html", methods=["POST", "GET"])
 def SuccessPage():
+    text = ""
+    
     if request.method == "GET" and request.args.get("url"):
         url = request.args.get("url", "")
-        if not isSafeURL(url):
+        if not IsSafeURL(url):
             return "Forbidden redirect!", 403
         return redirect(url, code=302)
-    
     elif request.method == "POST":
-        text = santiseHTML(request.form["UniqueID"])
-        print(text)
-    return render_template("success.html")
+        text = SantiseHTML(request.form["UniqueID"])
+    return render_template("success.html", message=UnSantiseHTML(text))
 
 
-def isSafeURL(url):
+def IsSafeURL(url):
     try:
         parsed_url = urlparse(url)
         if parsed_url.netloc and parsed_url.netloc not in ALLOWED_DOMAINS:
@@ -47,8 +47,11 @@ def isSafeURL(url):
     except Exception:
         return False
 
-def santiseHTML(text):
+def SantiseHTML(text):
     return html.escape(text)
+
+def UnSantiseHTML(text):
+    return html.unescape(text)
 
 if __name__ == "__main__":
     app.config["TEMPLATES_AUTO_RELOAD"] = True
