@@ -2,13 +2,14 @@ from flask import Flask, request, redirect, render_template
 from urllib.parse import urlparse
 import html
 import re
+from dotenv import load_dotenv
+import os
+
+load_dotenv() 
 
 app = Flask(__name__)
 
-ALLOWED_DOMAINS = [
-    "192.168.1.37:3000", 
-    "127.0.0.1:3000" 
-]
+allowedDomains = os.getenv('ALLOWED_DOMAINS')
 
 @app.route("/", methods=["POST", "GET"])
 def HomePage():
@@ -30,13 +31,14 @@ def SuccessPage():
         return redirect(url, code=302)
     elif request.method == "POST":
         text = SantiseHTML(request.form["UniqueID"])
-    return render_template("success.html", message=UnSantiseHTML(text))
+        
+    return render_template("success.html", message=text)
 
 
 def IsSafeURL(url):
     try:
         parsed_url = urlparse(url)
-        if parsed_url.netloc and parsed_url.netloc not in ALLOWED_DOMAINS:
+        if parsed_url.netloc and parsed_url.netloc not in allowedDomains:
             return False  
         if parsed_url.scheme and parsed_url.scheme not in ["http", "https"]:
             return False  
@@ -50,6 +52,7 @@ def IsSafeURL(url):
 def SantiseHTML(text):
     return html.escape(text)
 
+@app.template_filter('UnSantiseHTML')
 def UnSantiseHTML(text):
     return html.unescape(text)
 
