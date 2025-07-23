@@ -1,11 +1,7 @@
 import network
 import urequests
-import socket
 from time import sleep
-from picozero import pico_temp_sensor, pico_led
-import machine
-import rp2
-import sys
+from picozero import  pico_led
 import hidden
 
 def ConnectToWifi(ssid:str, password:str): # Checks if the data can connect
@@ -56,14 +52,12 @@ def GetDataFromMessage(message:str) -> dict:
 def GetJSONHeader() -> dict:
     return {"Content-Type": "application/json"}
 
-def Process(message:str):
-    ip = ConnectToWifi(hidden.ssid, hidden.password)
-    SendPostRequest(hidden.webpageURL, GetDataFromMessage(message), GetJSONHeader())
-
+ip = ConnectToWifi(hidden.ssid, hidden.password)
 for i in range(1):
-    Process("Im working")
+    ip = ConnectToWifi(hidden.ssid, hidden.password)
+    SendPostRequest(hidden.webpageURL, GetDataFromMessage("This is an automated message"), GetJSONHeader())
     sleep(1)
-print("done")
+
 
 
 
