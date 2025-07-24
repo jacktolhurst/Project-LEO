@@ -4,35 +4,31 @@ from time import sleep
 from picozero import  pico_led
 import hidden
 
-def ConnectToWifi(ssid:str, password:str): # Checks if the data can connect
+def ConnectToWifi(ssid:str, password:str, attempts:int=50): # Checks if the data can connect
+    pico_led.on()
+    
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     wlan.connect(ssid, password)
     
-    passedTime = 0
-    while True:
-        if passedTime > 10:
-            print("Connection Took too long")
-            
-            return None
-        
+    for i in range(attempts):
         if wlan.isconnected():
+            pico_led.off()
+            
             print("Connected")
             
-            pico_led.on()
-            sleep(1)
-            pico_led.off()
+            hidden.lastUsedNetwork = (ssid, password)
             
             ip = wlan.ifconfig()[0]
             return ip
         else:
-            print('Waiting for connection...')
-        
-            pico_led.on()
-            sleep(0.2)
-            pico_led.off()
-            sleep(0.2)
-            passedTime += 0.4
+            print('Waiting for connection... ' + str(i+1))
+
+            sleep(0.1)
+    
+    pico_led.off()
+    print("Connection Took too long")
+    return None
 
 def SendPostRequest(url, data, headers):
     try:
@@ -46,17 +42,42 @@ def SendPostRequest(url, data, headers):
     except Exception as e:
         print("Failed to send POST request:", e)
 
+def ConnectToAllNetworks():
+    currNetworks = GetCurrentNetworks()
+    print(currNetworks)
+    
+    ip = None
+    for networkName in currNetworks:
+        for password in hidden.knownPasswords:
+            sleep(0.1)
+            ip = ConnectToWifi(networkName, password)
+            
+            if ip != None:
+                break
+    
+    return ip
+
+def GetCurrentNetworks() -> list[str]:
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    
+    foundNetworks = [currNetwork[0].decode('utf-8') for currNetwork in wlan.scan()]
+    return foundNetworks
+
 def GetDataFromMessage(message:str) -> dict:
     return {"content": message}
 
 def GetJSONHeader() -> dict:
     return {"Content-Type": "application/json"}
 
-ip = ConnectToWifi(hidden.ssid, hidden.password)
-for i in range(1):
-    ip = ConnectToWifi(hidden.ssid, hidden.password)
-    SendPostRequest(hidden.webpageURL, GetDataFromMessage("This is an automated message"), GetJSONHeader())
-    sleep(1)
+ip = ConnectToWifi(hidden.lastUsedNetwork[0],hidden.lastUsedNetwork[1], 50)
+if ip == None:
+    ip = ConnectToAllNetworks()
+
+if ip == None:
+    print("A connection could not be made")
+else:
+    SendPostRequest(hidden.webpageURL, GetDataFromMessage("MEOWWW"), GetJSONHeader())
 
 
 
