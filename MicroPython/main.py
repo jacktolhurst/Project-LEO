@@ -7,9 +7,12 @@ from machine import Pin
 import utime
 import time
 import gc
+import ntptime
 
 button = Pin(15, Pin.IN, Pin.PULL_UP)
 redLed = Pin(14, Pin.OUT)
+
+UTC_OFFSET = 10 * 3600 # australia is UTC +10, change according to country
 
 def SendCode(led, weight:int): # 2 means error occured, 3 means start of process
     for i in range(weight):
@@ -80,7 +83,7 @@ def AddContentToData(message:str) -> dict:
 def GetJSONHeader() -> dict:
     return {"Content-Type": "application/json"}
 
-def FormatNumber(number:int) -> int:
+def FormatNumber(number:int) -> str:
     return f"{number:02}" if number < 10 else str(number)
 
 def ConnectToCurrentNetworks(attempts:int=15) -> bool:
@@ -89,7 +92,7 @@ def ConnectToCurrentNetworks(attempts:int=15) -> bool:
     print(currentNetworks)
     networkName = CheckKnownNetworks(currentNetworks)
     networkPassword = GetPasswordFromName(networkName)
-    if networkName or networkPassword:
+    if networkName and networkPassword:
         return ConnectToWifi(networkName, networkPassword, attempts)
     else:
         return False
@@ -100,8 +103,12 @@ def SendData(text:str) -> bool:
     with open("Data/WebsiteUrls.json", "r") as file:
         data = json.load(file)
 
+    success = False
     for url in data:
-        return SendPostRequest(url, text, GetJSONHeader())
+        if SendPostRequest(url, text, GetJSONHeader()):
+            success = True
+    return success
+
 
 while True:
     print("--------------------")
@@ -112,6 +119,7 @@ while True:
     if connectedToWifi:
         print("Connected To Wifi")
         sleep(1)
+        ntptime.settime()
     while connectedToWifi:
         redLed.value(0)
         
@@ -119,11 +127,14 @@ while True:
             print("button Pressed")
             redLed.value(1)
             
-            timeStamp = "am"
-            if time.localtime()[3] > 12:
-                timeStamp = "pm"
             
-            SendData("CALL ME NOW: " + str(time.localtime()[3]%12) + ":" + str(FormatNumber(time.localtime()[4])) + timeStamp)
+            localTime = time.localtime(time.time() + UTC_OFFSET)
+            
+            hour = localTime[3] % 12 or 12
+            minute = FormatNumber(localTime[4])
+            timeStamp = "am" if localTime[3] < 12 else "pm"
+
+            SendData(f"CALL ME NOW: {hour}:{minute}{timeStamp}")
             redLed.value(0)
         
         connectedToWifi = network.WLAN(network.STA_IF).isconnected()
