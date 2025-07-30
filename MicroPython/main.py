@@ -1,84 +1,93 @@
 import network
 import urequests
 from time import sleep
-from picozero import  pico_led
-import hidden
+from picozero import pico_led
+import json
+from machine import Pin
+import utime
 
-def ConnectToWifi(ssid:str, password:str, attempts:int=50): # Checks if the data can connect
-    pico_led.on()
-    
+led = Pin(15, Pin.OUT)
+
+def ConnectToWifi(ssid:str, password:str, attemps:int=5) -> bool:
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     wlan.connect(ssid, password)
     
-    for i in range(attempts):
+    connected = False
+    for attempt in range(attemps):
         if wlan.isconnected():
-            pico_led.off()
-            
-            print("Connected")
-            
-            hidden.lastUsedNetwork = (ssid, password)
-            
-            ip = wlan.ifconfig()[0]
-            return ip
-        else:
-            print('Waiting for connection... ' + str(i+1))
-
-            sleep(0.1)
+            connected = True
+            break
+        sleep(0.1)
     
-    pico_led.off()
-    print("Connection Took too long")
-    return None
+    return connected
 
-def SendPostRequest(url, data, headers):
+def SendPostRequest(url:str, data:str, headers:str) -> bool:
     try:
-        response = urequests.post(url, json=data, headers=headers)
+        response = urequests.post(url, json=AddContentToData(data), headers=headers)
         if response.status_code == 200:
-            print("It is a success! All data has been sent")
+            return True
         else:
             print("Status code:", response.status_code)
+            return False
         
-        response.close()
     except Exception as e:
         print("Failed to send POST request:", e)
+        return False
 
-def ConnectToAllNetworks():
-    currNetworks = GetCurrentNetworks()
-    print(currNetworks)
-    
-    ip = None
-    for networkName in currNetworks:
-        for password in hidden.knownPasswords:
-            sleep(0.1)
-            ip = ConnectToWifi(networkName, password)
-            
-            if ip != None:
-                break
-    
-    return ip
-
-def GetCurrentNetworks() -> list[str]:
+def GetCurrNetworks() -> list:
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     
     foundNetworks = [currNetwork[0].decode('utf-8') for currNetwork in wlan.scan()]
     return foundNetworks
 
-def GetDataFromMessage(message:str) -> dict:
+def CheckKnownNetworks(currentNetworks:list) -> str:
+    try:
+        with open("Data/KnownConnections.json", "r") as file:
+            data = json.load(file)
+    except:
+        print("File could not be opened")
+        return None
+
+    for ssid in data.keys():
+        if ssid in currentNetworks:
+            return ssid
+    return None
+
+def GetPasswordFromName(name:str) -> str:
+    try:
+        with open("Data/KnownConnections.json", "r") as file:
+            data = json.load(file)
+    except:
+        print("File could not be opened")
+        return None
+    
+    return data[name]
+
+def AddContentToData(message:str) -> dict:
     return {"content": message}
 
 def GetJSONHeader() -> dict:
     return {"Content-Type": "application/json"}
 
-ip = ConnectToWifi(hidden.lastUsedNetwork[0],hidden.lastUsedNetwork[1], 50)
-if ip == None:
-    ip = ConnectToAllNetworks()
+led.value(1)
 
-if ip == None:
-    print("A connection could not be made")
+currentNetworks = GetCurrNetworks()
+networkName = CheckKnownNetworks(currentNetworks)
+if networkName:
+    networkPassword = GetPasswordFromName(networkName)
+    if ConnectToWifi(networkName, networkPassword, 10):
+        with open("Data/WebsiteUrls.json", "r") as file:
+            data = json.load(file)
+
+        for url in data:
+            print(SendPostRequest(url, "I love my wife", GetJSONHeader()))
 else:
-    SendPostRequest(hidden.webpageURL, GetDataFromMessage("MEOWWW"), GetJSONHeader())
+    print("No network could be accessed")
 
+led.value(0)
+sleep(2)
 
 
 
