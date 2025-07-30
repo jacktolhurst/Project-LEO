@@ -80,9 +80,13 @@ def AddContentToData(message:str) -> dict:
 def GetJSONHeader() -> dict:
     return {"Content-Type": "application/json"}
 
+def FormatNumber(number:int) -> int:
+    return f"{number:02}" if number < 10 else str(number)
+
 def ConnectToCurrentNetworks(attempts:int=15) -> bool:
     gc.collect()
     currentNetworks = GetCurrNetworks()
+    print(currentNetworks)
     networkName = CheckKnownNetworks(currentNetworks)
     networkPassword = GetPasswordFromName(networkName)
     if networkName or networkPassword:
@@ -103,19 +107,28 @@ while True:
     print("--------------------")
     print("starting")
     redLed.value(1)
+    sleep(1)
     connectedToWifi = ConnectToCurrentNetworks()
-    while connectedToWifi:
+    if connectedToWifi:
         print("Connected To Wifi")
+        sleep(1)
+    while connectedToWifi:
         redLed.value(0)
         
         if button.value() == 0:
             print("button Pressed")
             redLed.value(1)
-            SendData("ATTENTION")
+            
+            timeStamp = "am"
+            if time.localtime()[3] > 12:
+                timeStamp = "pm"
+            
+            SendData("CALL ME NOW: " + str(time.localtime()[3]%12) + ":" + str(FormatNumber(time.localtime()[4])) + timeStamp)
             redLed.value(0)
         
         connectedToWifi = network.WLAN(network.STA_IF).isconnected()
         utime.sleep(1)
+
 
 
 
