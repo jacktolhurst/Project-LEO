@@ -5,8 +5,18 @@ from picozero import pico_led
 import json
 from machine import Pin
 import utime
+import time
 
-led = Pin(15, Pin.OUT)
+button = Pin(15, Pin.IN, Pin.PULL_UP)
+led = Pin(14, Pin.OUT)
+
+def SendCode(led, weight:int): # 2 means error occured, 3 means start of process
+    for i in range(weight):
+        led.value(0)
+        sleep(0.1)
+        led.value(1)
+        sleep(0.1)
+    led.value(0)
 
 def ConnectToWifi(ssid:str, password:str, attemps:int=5) -> bool:
     wlan = network.WLAN(network.STA_IF)
@@ -22,7 +32,7 @@ def ConnectToWifi(ssid:str, password:str, attemps:int=5) -> bool:
     
     return connected
 
-def SendPostRequest(url:str, data:str, headers:str) -> bool:
+def SendPostRequest(url:str, data:str, headers:dict) -> bool:
     try:
         response = urequests.post(url, json=AddContentToData(data), headers=headers)
         if response.status_code == 200:
@@ -63,7 +73,7 @@ def GetPasswordFromName(name:str) -> str:
         print("File could not be opened")
         return None
     
-    return data[name]
+    return data.get(name)
 
 def AddContentToData(message:str) -> dict:
     return {"content": message}
@@ -71,23 +81,28 @@ def AddContentToData(message:str) -> dict:
 def GetJSONHeader() -> dict:
     return {"Content-Type": "application/json"}
 
-led.value(1)
+SendCode(led, 3)
+while True:
+    if button.value() == 0:
+        try:
+            led.value(1)
+            currentNetworks = GetCurrNetworks()
+            networkName = CheckKnownNetworks(currentNetworks)
+            networkPassword = GetPasswordFromName(networkName)
+            ConnectToWifi(networkName, networkPassword, 10)
+            with open("Data/WebsiteUrls.json", "r") as file:
+                data = json.load(file)
 
-currentNetworks = GetCurrNetworks()
-networkName = CheckKnownNetworks(currentNetworks)
-if networkName:
-    networkPassword = GetPasswordFromName(networkName)
-    if ConnectToWifi(networkName, networkPassword, 10):
-        with open("Data/WebsiteUrls.json", "r") as file:
-            data = json.load(file)
+            for url in data:
+                SendPostRequest(url, "ATTENTION", GetJSONHeader())
+        except Exception as e:
+            print(e)
+            SendCode(led, 2)
+    
+    utime.sleep(1)
+    led.value(0)
 
-        for url in data:
-            print(SendPostRequest(url, "I love my wife", GetJSONHeader()))
-else:
-    print("No network could be accessed")
 
-led.value(0)
-sleep(2)
 
 
 
