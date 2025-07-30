@@ -6,9 +6,10 @@ import json
 from machine import Pin
 import utime
 import time
+import gc
 
 button = Pin(15, Pin.IN, Pin.PULL_UP)
-led = Pin(14, Pin.OUT)
+redLed = Pin(14, Pin.OUT)
 
 def SendCode(led, weight:int): # 2 means error occured, 3 means start of process
     for i in range(weight):
@@ -34,15 +35,15 @@ def ConnectToWifi(ssid:str, password:str, attemps:int=5) -> bool:
 
 def SendPostRequest(url:str, data:str, headers:dict) -> bool:
     try:
-        response = urequests.post(url, json=AddContentToData(data), headers=headers)
-        if response.status_code == 200:
+        response = urequests.post(url, data=json.dumps(AddContentToData(data)), headers=headers)
+        if str(response.status_code).startswith("2"):
+            response.close()
             return True
         else:
-            print("Status code:", response.status_code)
+            response.close()
             return False
         
     except Exception as e:
-        print("Failed to send POST request:", e)
         return False
 
 def GetCurrNetworks() -> list:
@@ -57,7 +58,6 @@ def CheckKnownNetworks(currentNetworks:list) -> str:
         with open("Data/KnownConnections.json", "r") as file:
             data = json.load(file)
     except:
-        print("File could not be opened")
         return None
 
     for ssid in data.keys():
@@ -70,7 +70,6 @@ def GetPasswordFromName(name:str) -> str:
         with open("Data/KnownConnections.json", "r") as file:
             data = json.load(file)
     except:
-        print("File could not be opened")
         return None
     
     return data.get(name)
@@ -81,28 +80,42 @@ def AddContentToData(message:str) -> dict:
 def GetJSONHeader() -> dict:
     return {"Content-Type": "application/json"}
 
-SendCode(led, 3)
-while True:
-    if button.value() == 0:
-        try:
-            led.value(1)
-            currentNetworks = GetCurrNetworks()
-            networkName = CheckKnownNetworks(currentNetworks)
-            networkPassword = GetPasswordFromName(networkName)
-            ConnectToWifi(networkName, networkPassword, 10)
-            with open("Data/WebsiteUrls.json", "r") as file:
-                data = json.load(file)
+def ConnectToCurrentNetworks(attempts:int=15) -> bool:
+    gc.collect()
+    currentNetworks = GetCurrNetworks()
+    networkName = CheckKnownNetworks(currentNetworks)
+    networkPassword = GetPasswordFromName(networkName)
+    if networkName or networkPassword:
+        return ConnectToWifi(networkName, networkPassword, attempts)
+    else:
+        return False
 
-            for url in data:
-                SendPostRequest(url, "ATTENTION", GetJSONHeader())
-        except Exception as e:
-            print(e)
-            SendCode(led, 2)
+def SendData(text:str) -> bool:
+    gc.collect()
     
-    utime.sleep(1)
-    led.value(0)
+    with open("Data/WebsiteUrls.json", "r") as file:
+        data = json.load(file)
 
+    for url in data:
+        return SendPostRequest(url, text, GetJSONHeader())
 
+while True:
+    print("--------------------")
+    print("starting")
+    redLed.value(1)
+    connectedToWifi = ConnectToCurrentNetworks()
+    while connectedToWifi:
+        print("Connected To Wifi")
+        redLed.value(0)
+        
+        if button.value() == 0:
+            print("button Pressed")
+            redLed.value(1)
+            SendData("ATTENTION")
+            redLed.value(0)
+        
+        connectedToWifi = network.WLAN(network.STA_IF).isconnected()
+        utime.sleep(1)
 
 
 
